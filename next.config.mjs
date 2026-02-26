@@ -14,7 +14,7 @@ const pwaConfig = withPWA({
         networkTimeoutSeconds: 3,
         expiration: {
           maxEntries: 200,
-          maxAgeSeconds: 60 * 60, // 1 hour
+          maxAgeSeconds: 60 * 60,
         },
       },
     },
@@ -25,7 +25,7 @@ const pwaConfig = withPWA({
         cacheName: 'supabase-storage',
         expiration: {
           maxEntries: 100,
-          maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+          maxAgeSeconds: 60 * 60 * 24 * 30,
         },
       },
     },
@@ -37,8 +37,13 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   images: {
-    domains: ['*.supabase.co'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**.supabase.co',
+      },
+    ],
   },
 };
 
-export default pwaConfig(nextConfig);
+export default nextConfig;
