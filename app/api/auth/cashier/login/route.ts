@@ -28,8 +28,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    user satisfies { id: string; name: string; email: string; role: string; branch_id: string };
-
     // Get terminal to verify branch
     const { data: terminal } = await supabaseAdmin
       .from("terminals")
