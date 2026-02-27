@@ -28,6 +28,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    user satisfies { id: string; name: string; email: string; role: string; branch_id: string };
+
     // Get terminal to verify branch
     const { data: terminal } = await supabaseAdmin
       .from("terminals")
@@ -46,7 +48,7 @@ export async function POST(request: NextRequest) {
     const sessionId = uuid();
     const token = `session_${uuid()}`;
     const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 12); // 12 hour session
+    expiresAt.setHours(expiresAt.getHours() + 12);
 
     return NextResponse.json({
       success: true,
