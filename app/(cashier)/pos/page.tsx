@@ -5,7 +5,7 @@ import { db, checkDBHealth } from "@/lib/db/schema";
 import { syncProductsFromServer, getAllCategories } from "@/lib/db/products";
 
 export default function POSPage() {
-  const [dbStatus, setDbStatus] = useState
+  const [dbStatus, setDbStatus] = useState<
     "checking" | "connected" | "error"
   >("checking");
   const [stats, setStats] = useState({
