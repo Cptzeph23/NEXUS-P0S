@@ -36,29 +36,6 @@ const config: Config = {
           950: '#07070f',
         },
       },
-      fontFamily: {
-        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
-        mono: ['var(--font-jetbrains-mono)', 'monospace'],
-      },
-      animation: {
-        'slide-in': 'slideIn 0.2s ease',
-        'fade-in': 'fadeIn 0.15s ease',
-        'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
-      },
-      keyframes: {
-        slideIn: {
-          '0%': { opacity: '0', transform: 'translateX(10px)' },
-          '100%': { opacity: '1', transform: 'translateX(0)' },
-        },
-        fadeIn: {
-          '0%': { opacity: '0' },
-          '100%': { opacity: '1' },
-        },
-        pulseSoft: {
-          '0%, 100%': { opacity: '1' },
-          '50%': { opacity: '0.5' },
-        },
-      },
     },
   },
   plugins: [],

@@ -1,52 +1,33 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
-@layer base {
-  :root {
-    --bg-base: #07070f;
-    --bg-card: #0d0d1a;
-    --bg-raised: #14141f;
-    --bg-hover: #1e1e30;
-    
-    --border-default: #1e1e30;
-    --border-strong: #2a2a3f;
-    
-    --text-primary: #e8e0f8;
-    --text-secondary: #c0b8d8;
-    --text-muted: #6b6b8a;
-    
-    --brand-primary: #7c3aed;
-  }
-  
-  body {
-    @apply bg-surface-950 text-surface-50;
-    font-family: var(--font-inter), system-ui, sans-serif;
-    overflow: hidden;
-    user-select: none;
-    -webkit-font-smoothing: antialiased;
-  }
-  
-  input, textarea, [contenteditable] {
-    user-select: text;
-  }
+body {
+  background-color: #07070f;
+  color: #e8e0f8;
+  font-family: system-ui, sans-serif;
+  overflow: hidden;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
 }
 
-@layer utilities {
-  .text-money {
-    @apply font-mono font-bold tracking-tight;
-  }
-  
-  .pos-screen {
-    @apply flex h-screen w-screen overflow-hidden;
-  }
-  
-  .touch-target {
-    @apply min-h-[44px] min-w-[44px] flex items-center justify-center;
-  }
+input,
+textarea,
+[contenteditable] {
+  user-select: text;
 }
 
-/* Scrollbar styles */
+.text-money {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.pos-screen {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -57,15 +38,14 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
+  background: #2a2a3f;
   border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--brand-primary);
+  background: #7c3aed;
 }
 
-/* Hide number input spinners */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
