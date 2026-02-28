@@ -32,18 +32,24 @@ export function PaymentModal({ total, onComplete, onClose }: PaymentModalProps) 
     setCashInput((prev) => (prev.length > 1 ? prev.slice(0, -1) : "0"));
   }
 
-  async function handlePay() {
-    if (method === "cash" && cash < total) return;
-
-    setIsProcessing(true);
-    await new Promise((r) => setTimeout(r, 800));
-
-    onComplete({
-      method,
-      amount: method === "cash" ? cash : total,
-      change: method === "cash" ? change : undefined,
-    });
+ async function handlePay() {
+  console.log("handlePay called", { method, cash, total });
+  
+  if (method === "cash" && cash < total) {
+    console.log("Not enough cash");
+    return;
   }
+
+  setIsProcessing(true);
+  await new Promise((r) => setTimeout(r, 800));
+
+  console.log("Calling onComplete");
+  onComplete({
+    method,
+    amount: method === "cash" ? cash : total,
+    change: method === "cash" ? change : undefined,
+  });
+}
 
   const digits = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "00", "."];
 

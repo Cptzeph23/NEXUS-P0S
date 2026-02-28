@@ -69,13 +69,30 @@ export default function POSPage() {
   }
 
   async function handlePaymentComplete(payment: any) {
-    if (!cashier || !branch) return;
+  if (!cashier || !branch) {
+    console.error("Missing cashier or branch");
+    return;
+  }
+
+  try {
+    console.log("Processing payment...", payment);
+
+    // Get terminal ID from auth store or create a temporary one
+    const { terminal } = useAuthStore.getState();
+    const terminalId = terminal?.id || "temp-terminal-id";
 
     const receiptNumber = generateReceiptNumber(branch.code, 1);
 
+    console.log("Saving transaction...", {
+      receiptNumber,
+      terminalId,
+      branchId: branch.id,
+      cashierId: cashier.id,
+    });
+
     const transaction = await saveTransaction({
       type: "sale",
-      terminalId: "temp-terminal-id", // TODO: Get from session
+      terminalId,
       branchId: branch.id,
       cashierId: cashier.id,
       cashierName: cashier.name,
@@ -96,6 +113,8 @@ export default function POSPage() {
       syncStatus: "pending",
     });
 
+    console.log("Transaction saved:", transaction);
+
     setLastReceipt({
       ...transaction,
       payment,
@@ -104,7 +123,11 @@ export default function POSPage() {
 
     setShowPayment(false);
     setShowReceipt(true);
+  } catch (error) {
+    console.error("Payment error:", error);
+    alert("Payment failed: " + (error as Error).message);
   }
+}
 
   function handleNewSale() {
     clear();

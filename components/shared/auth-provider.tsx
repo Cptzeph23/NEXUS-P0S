@@ -8,7 +8,6 @@ import {
   getStoredTerminalId,
   getStoredBranchId,
   getStoredSessionId,
-  saveTerminalConfig,
 } from "@/lib/auth/helpers";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -19,30 +18,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     async function initializeAuth() {
       try {
-        // Get or create device ID
         const deviceId = await getOrCreateDeviceId();
-
-        // Check if terminal is registered
         const terminalId = await getStoredTerminalId();
         const branchId = await getStoredBranchId();
 
+        console.log("Auth init:", { deviceId, terminalId, branchId });
+
         if (!terminalId || !branchId) {
-          // Need to register terminal
+          console.log("No terminal registered, redirecting to boot");
           router.push("/boot");
           return;
         }
 
-        // Terminal registered, check session
+        // Fetch terminal and branch data from API
+        try {
+          const response = await fetch(`/api/terminal/${terminalId}`);
+          if (response.ok) {
+            const data = await response.json();
+            setTerminal(data.terminal);
+            setBranch(data.branch);
+            console.log("Terminal and branch loaded:", data);
+          }
+        } catch (err) {
+          console.error("Failed to load terminal data:", err);
+        }
+
         const sessionId = await getStoredSessionId();
 
         if (!sessionId) {
-          // Need to log in
+          console.log("No session, redirecting to login");
           router.push("/login");
           return;
         }
-
-        // TODO: Validate session with server
-        // For now, assume valid
 
         setInitialized(true);
       } catch (error) {
