@@ -28,63 +28,76 @@ export default function LoginPage() {
   }
 
   async function handleLogin() {
-    if (pin.length !== 4) {
-      setError("Please enter 4-digit PIN");
+  if (pin.length !== 4) {
+    setError("Please enter 4-digit PIN");
+    return;
+  }
+
+  setIsLoading(true);
+  setError("");
+
+  try {
+    const terminalId = await getStoredTerminalId();
+
+    if (!terminalId) {
+      router.push("/boot");
       return;
     }
 
-    setIsLoading(true);
-    setError("");
+    const response = await fetch("/api/auth/cashier/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin, terminalId }),
+    });
 
-    try {
-      const terminalId = await getStoredTerminalId();
+    const data = await response.json();
 
-      if (!terminalId) {
-        router.push("/boot");
-        return;
-      }
-
-      const response = await fetch("/api/auth/cashier/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin, terminalId }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Login failed");
-      }
-
-      // Save session
-      await saveSession(
-        data.session.sessionId,
-        data.cashier.id,
-        data.session.token
-      );
-
-      login(data.cashier, {
-        sessionId: data.session.sessionId,
-        cashier: {
-          id: data.cashier.id,
-          name: data.cashier.name,
-          role: data.cashier.role,
-        },
-        terminalId,
-        branchId: data.cashier.branchId,
-        token: data.session.token,
-        expiresAt: data.session.expiresAt,
-        startedAt: data.session.startedAt,
-      });
-
-      router.push("/pos");
-    } catch (err: any) {
-      setError(err.message);
-      setPin("");
-    } finally {
-      setIsLoading(false);
+    if (!response.ok) {
+      throw new Error(data.error || "Login failed");
     }
+
+    // Save session
+    await saveSession(
+      data.session.sessionId,
+      data.cashier.id,
+      data.session.token
+    );
+
+    // Load terminal and branch data
+    try {
+      const terminalResponse = await fetch(`/api/terminal/${terminalId}`);
+      if (terminalResponse.ok) {
+        const terminalData = await terminalResponse.json();
+        useAuthStore.getState().setTerminal(terminalData.terminal);
+        useAuthStore.getState().setBranch(terminalData.branch);
+      }
+    } catch (err) {
+      console.warn("Could not load terminal data:", err);
+    }
+
+    // Update auth store
+    login(data.cashier, {
+      sessionId: data.session.sessionId,
+      cashier: {
+        id: data.cashier.id,
+        name: data.cashier.name,
+        role: data.cashier.role,
+      },
+      terminalId,
+      branchId: data.cashier.branchId,
+      token: data.session.token,
+      expiresAt: data.session.expiresAt,
+      startedAt: data.session.startedAt,
+    });
+
+    router.push("/pos");
+  } catch (err: any) {
+    setError(err.message);
+    setPin("");
+  } finally {
+    setIsLoading(false);
   }
+}
 
   const digits = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
 

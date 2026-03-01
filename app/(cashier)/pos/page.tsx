@@ -15,20 +15,12 @@ import { PaymentModal } from "@/components/pos/payment-modal";
 import { fmt } from "@/lib/utils";
 import { saveTransaction } from "@/lib/db/transactions";
 import { generateReceiptNumber } from "@/lib/utils";
+import { getStoredTerminalId } from "@/lib/auth/helpers";
 
 export default function POSPage() {
-  const { cashier, branch } = useAuthStore();
-  const {
-    items,
-    discount,
-    addItem,
-    removeItem,
-    updateQuantity,
-    updateDiscount,
-    setCartDiscount,
-    getTotals,
-    clear,
-  } = useCartStore();
+  // Get the entire store, not destructured
+  const authStore = useAuthStore();
+  const cartStore = useCartStore();
 
   const [products, setProducts] = useState<IDBProduct[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -37,16 +29,34 @@ export default function POSPage() {
   const [showPayment, setShowPayment] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [lastReceipt, setLastReceipt] = useState<any>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  const totals = getTotals();
+  // Access values from store
+  const cashier = authStore.cashier;
+  const branch = authStore.branch;
+  const terminal = authStore.terminal;
+  const items = cartStore.items;
+  const discount = cartStore.discount;
+  const totals = cartStore.getTotals();
 
   useEffect(() => {
     async function loadData() {
-      const cats = await getAllCategories();
-      setCategories(cats);
+      try {
+        const cats = await getAllCategories();
+        setCategories(cats);
 
-      const prods = await getProductsByCategory("All");
-      setProducts(prods);
+        const prods = await getProductsByCategory("All");
+        setProducts(prods);
+
+        console.log("POS initialized with auth:", { 
+          hasCashier: !!authStore.cashier, 
+          hasBranch: !!authStore.branch 
+        });
+      } catch (error) {
+        console.error("Failed to load data:", error);
+      } finally {
+        setIsInitialized(true);
+      }
     }
     loadData();
   }, []);
@@ -69,69 +79,80 @@ export default function POSPage() {
   }
 
   async function handlePaymentComplete(payment: any) {
-  if (!cashier || !branch) {
-    console.error("Missing cashier or branch");
-    return;
+    console.log("Payment initiated:", payment);
+
+    if (!cashier || !branch) {
+      alert("Error: Session expired. Please log in again.");
+      return;
+    }
+
+    try {
+      const terminalId = terminal?.id || (await getStoredTerminalId()) || "temp-id";
+      const receiptNumber = generateReceiptNumber(branch.code, 1);
+
+      console.log("Saving transaction:", { terminalId, receiptNumber });
+
+      const transaction = await saveTransaction({
+        type: "sale",
+        terminalId,
+        branchId: branch.id,
+        cashierId: cashier.id,
+        cashierName: cashier.name,
+        receiptNumber,
+        items: cartStore.items,
+        payment: {
+          method: payment.method,
+          amount: payment.amount,
+          change: payment.change,
+        },
+        subtotal: totals.subtotal,
+        discount: cartStore.discount,
+        discountAmt: totals.cartDiscount,
+        tax: totals.tax,
+        total: totals.total,
+        status: "completed",
+        completedAt: new Date().toISOString(),
+        syncStatus: "pending",
+      });
+
+      console.log("Transaction saved:", transaction.id);
+
+      setLastReceipt({
+        ...transaction,
+        payment,
+        branch: branch.name,
+      });
+
+      cartStore.clear();
+      setShowPayment(false);
+      setShowReceipt(true);
+    } catch (error) {
+      console.error("Payment error:", error);
+      alert("Payment failed: " + (error as Error).message);
+    }
   }
-
-  try {
-    console.log("Processing payment...", payment);
-
-    // Get terminal ID from auth store or create a temporary one
-    const { terminal } = useAuthStore.getState();
-    const terminalId = terminal?.id || "temp-terminal-id";
-
-    const receiptNumber = generateReceiptNumber(branch.code, 1);
-
-    console.log("Saving transaction...", {
-      receiptNumber,
-      terminalId,
-      branchId: branch.id,
-      cashierId: cashier.id,
-    });
-
-    const transaction = await saveTransaction({
-      type: "sale",
-      terminalId,
-      branchId: branch.id,
-      cashierId: cashier.id,
-      cashierName: cashier.name,
-      receiptNumber,
-      items,
-      payment: {
-        method: payment.method,
-        amount: payment.amount,
-        change: payment.change,
-      },
-      subtotal: totals.subtotal,
-      discount,
-      discountAmt: totals.cartDiscount,
-      tax: totals.tax,
-      total: totals.total,
-      status: "completed",
-      completedAt: new Date().toISOString(),
-      syncStatus: "pending",
-    });
-
-    console.log("Transaction saved:", transaction);
-
-    setLastReceipt({
-      ...transaction,
-      payment,
-      branch: branch.name,
-    });
-
-    setShowPayment(false);
-    setShowReceipt(true);
-  } catch (error) {
-    console.error("Payment error:", error);
-    alert("Payment failed: " + (error as Error).message);
-  }
-}
 
   function handleNewSale() {
-    clear();
+    cartStore.clear();
     setShowReceipt(false);
+  }
+
+  // Show loading only if data isn't initialized
+  if (!isInitialized) {
+    return (
+      <div
+        className="flex items-center justify-center h-screen"
+        style={{ backgroundColor: "#07070f", color: "#6b6b8a" }}
+      >
+        <div className="flex flex-col items-center gap-3">
+          <div
+            className="w-10 h-10 border-4 border-t-transparent rounded-full animate-spin"
+            style={{ borderColor: "#7c3aed", borderTopColor: "transparent" }}
+          />
+          <div>Loading POS...</div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -165,8 +186,11 @@ export default function POSPage() {
               onClick={() => handleCategoryChange(cat)}
               className="px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap"
               style={{
-                border: `1px solid ${activeCategory === cat ? "#7c3aed" : "#1e1e30"}`,
-                backgroundColor: activeCategory === cat ? "#1f1040" : "transparent",
+                border: `1px solid ${
+                  activeCategory === cat ? "#7c3aed" : "#1e1e30"
+                }`,
+                backgroundColor:
+                  activeCategory === cat ? "#1f1040" : "transparent",
                 color: activeCategory === cat ? "#c4b5fd" : "#4a4a6a",
               }}
             >
@@ -184,7 +208,7 @@ export default function POSPage() {
                 product={product}
                 inCart={items.some((i) => i.productId === product.id)}
                 onAdd={(p) =>
-                  addItem({
+                  cartStore.addItem({
                     id: p.id,
                     barcode: p.barcode || "",
                     name: p.name,
@@ -229,7 +253,7 @@ export default function POSPage() {
           </div>
           {items.length > 0 && (
             <button
-              onClick={clear}
+              onClick={() => cartStore.clear()}
               className="px-3 py-1 rounded-lg text-xs font-semibold"
               style={{
                 backgroundColor: "#1a0d0d",
@@ -245,7 +269,10 @@ export default function POSPage() {
         {/* Cart Items */}
         <div className="flex-1 overflow-y-auto p-3">
           {items.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full" style={{ color: "#2a2a3f" }}>
+            <div
+              className="flex flex-col items-center justify-center h-full"
+              style={{ color: "#2a2a3f" }}
+            >
               <div className="text-5xl mb-4 opacity-40">🛒</div>
               <div className="text-sm font-semibold">Cart is empty</div>
               <div className="text-xs mt-2 opacity-70">
@@ -258,11 +285,11 @@ export default function POSPage() {
                 <CartLine
                   key={item.productId}
                   item={item}
-                  onUpdateQty={(qty) => updateQuantity(item.productId, qty)}
+                  onUpdateQty={(qty) => cartStore.updateQuantity(item.productId, qty)}
                   onUpdateDiscount={(disc) =>
-                    updateDiscount(item.productId, disc)
+                    cartStore.updateDiscount(item.productId, disc)
                   }
-                  onRemove={() => removeItem(item.productId)}
+                  onRemove={() => cartStore.removeItem(item.productId)}
                 />
               ))}
             </div>
@@ -277,19 +304,28 @@ export default function POSPage() {
               className="p-4 rounded-xl mb-4"
               style={{ backgroundColor: "#0a0a14" }}
             >
-              <div className="flex justify-between text-sm mb-2" style={{ color: "#6b6b8a" }}>
+              <div
+                className="flex justify-between text-sm mb-2"
+                style={{ color: "#6b6b8a" }}
+              >
                 <span>Subtotal</span>
                 <span className="text-money">{fmt(totals.subtotal)}</span>
               </div>
-              <div className="flex justify-between text-sm mb-2" style={{ color: "#6b6b8a" }}>
-                <span>Tax (8%)</span>
+              <div
+                className="flex justify-between text-sm mb-2"
+                style={{ color: "#6b6b8a" }}
+              >
+                <span>Tax</span>
                 <span className="text-money">{fmt(totals.tax)}</span>
               </div>
               <div
                 className="flex justify-between pt-3"
                 style={{ borderTop: "1px solid #1e1e30" }}
               >
-                <span className="text-lg font-bold" style={{ color: "#e0d8f8" }}>
+                <span
+                  className="text-lg font-bold"
+                  style={{ color: "#e0d8f8" }}
+                >
                   TOTAL
                 </span>
                 <span
@@ -340,7 +376,10 @@ export default function POSPage() {
               fontFamily: "monospace",
             }}
           >
-            <div className="text-center mb-4" style={{ borderBottom: "2px dashed #ccc", paddingBottom: 12 }}>
+            <div
+              className="text-center mb-4"
+              style={{ borderBottom: "2px dashed #ccc", paddingBottom: 12 }}
+            >
               <div className="text-xl font-bold">NEXUS POS</div>
               <div className="text-xs mt-1">{lastReceipt.branch}</div>
               <div className="text-xs">{new Date().toLocaleString()}</div>
@@ -376,7 +415,7 @@ export default function POSPage() {
               </div>
               <div className="flex justify-between text-xs mt-2">
                 <span>Payment: {lastReceipt.payment.method}</span>
-                {lastReceipt.payment.change && (
+                {lastReceipt.payment.change > 0 && (
                   <span>Change: {fmt(lastReceipt.payment.change)}</span>
                 )}
               </div>
@@ -387,7 +426,7 @@ export default function POSPage() {
               className="w-full mt-6 py-3 rounded-lg font-bold"
               style={{ backgroundColor: "#7c3aed", color: "#fff" }}
             >
-              🖨️ New Sale
+              New Sale
             </button>
           </div>
         </div>

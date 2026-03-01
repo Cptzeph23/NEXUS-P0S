@@ -3,10 +3,11 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const terminalId = params.id;
+    // Await params in Next.js 15+
+    const { id: terminalId } = await context.params;
 
     const { data: terminal, error: terminalError } = await supabaseAdmin
       .from("terminals")
