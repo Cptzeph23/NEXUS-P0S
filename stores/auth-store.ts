@@ -38,9 +38,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     }),
   
   logout: () =>
-    set({
-      isAuthenticated: false,
-      cashier: null,
-      session: null,
-    }),
+  set({
+    isAuthenticated: false,
+    cashier: null,
+    session: null,
+    terminal: null,
+    branch: null,
+    isInitialized: false,
+  }),
 }));

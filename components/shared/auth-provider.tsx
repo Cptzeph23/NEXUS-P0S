@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
 import {
   getOrCreateDeviceId,
@@ -13,55 +13,85 @@ import {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  const { setInitialized, setTerminal, setBranch } = useAuthStore();
+  const pathname = usePathname();
+  const { setInitialized, setTerminal, setBranch, logout } = useAuthStore();
 
   useEffect(() => {
     async function initializeAuth() {
       try {
-        const deviceId = await getOrCreateDeviceId();
-        const terminalId = await getStoredTerminalId();
-        const branchId = await getStoredBranchId();
-
-        console.log("Auth init:", { deviceId, terminalId, branchId });
-
-        if (!terminalId || !branchId) {
-          console.log("No terminal registered, redirecting to boot");
-          router.push("/boot");
+        // Skip auth check for public routes
+        if (pathname === "/boot" || pathname === "/login") {
+          setIsLoading(false);
           return;
         }
 
-        // Fetch terminal and branch data from API
+        const deviceId = await getOrCreateDeviceId();
+        const terminalId = await getStoredTerminalId();
+        const branchId = await getStoredBranchId();
+        const sessionId = await getStoredSessionId();
+
+        console.log("Auth check:", { 
+          deviceId: !!deviceId, 
+          terminalId: !!terminalId, 
+          branchId: !!branchId,
+          sessionId: !!sessionId,
+          pathname 
+        });
+
+        // No terminal registered
+        if (!terminalId || !branchId) {
+          console.log("No terminal, redirecting to boot");
+          router.replace("/boot");
+          setIsLoading(false);
+          return;
+        }
+
+        // No session
+        if (!sessionId) {
+          console.log("No session, redirecting to login");
+          router.replace("/login");
+          setIsLoading(false);
+          return;
+        }
+
+        // Load terminal and branch data
         try {
           const response = await fetch(`/api/terminal/${terminalId}`);
           if (response.ok) {
             const data = await response.json();
             setTerminal(data.terminal);
             setBranch(data.branch);
-            console.log("Terminal and branch loaded:", data);
+            console.log("Auth initialized:", { 
+              terminal: data.terminal.name, 
+              branch: data.branch.name 
+            });
+          } else {
+            // Terminal not found, clear and re-register
+            console.log("Terminal not found in database");
+            logout();
+            router.replace("/boot");
+            setIsLoading(false);
+            return;
           }
         } catch (err) {
-          console.error("Failed to load terminal data:", err);
-        }
-
-        const sessionId = await getStoredSessionId();
-
-        if (!sessionId) {
-          console.log("No session, redirecting to login");
-          router.push("/login");
+          console.error("Failed to load terminal:", err);
+          router.replace("/boot");
+          setIsLoading(false);
           return;
         }
 
         setInitialized(true);
       } catch (error) {
         console.error("Auth initialization error:", error);
-        router.push("/boot");
+        logout();
+        router.replace("/boot");
       } finally {
         setIsLoading(false);
       }
     }
 
     initializeAuth();
-  }, [router, setInitialized, setTerminal, setBranch]);
+  }, [pathname, router, setInitialized, setTerminal, setBranch, logout]);
 
   if (isLoading) {
     return (

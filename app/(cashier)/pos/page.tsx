@@ -132,10 +132,17 @@ export default function POSPage() {
     }
   }
 
-  function handleNewSale() {
-    cartStore.clear();
-    setShowReceipt(false);
-  }
+ function handleNewSale() {
+  cartStore.clear();
+  setShowReceipt(false);
+}
+
+async function handleLogout() {
+  const { clearSession } = await import("@/lib/auth/helpers");
+  await clearSession();
+  authStore.logout();
+  window.location.href = "/login";
+}
 
   // Show loading only if data isn't initialized
   if (!isInitialized) {
@@ -158,9 +165,43 @@ export default function POSPage() {
   return (
     <div className="pos-screen">
       {/* LEFT: Product Grid */}
-      <div className="flex-1 flex flex-col" style={{ backgroundColor: "#07070f" }}>
-        {/* Search Bar */}
-        <div className="p-4" style={{ borderBottom: "1px solid #14141f" }}>
+<div className="flex-1 flex flex-col" style={{ backgroundColor: "#07070f" }}>
+  {/* Header with Cashier Info */}
+  <div
+    className="p-3 flex justify-between items-center"
+    style={{ borderBottom: "1px solid #14141f" }}
+  >
+    <div className="flex items-center gap-3">
+      <div
+        className="w-10 h-10 rounded-full flex items-center justify-center text-lg"
+        style={{ backgroundColor: "#1f1040", color: "#a78bfa" }}
+      >
+        {cashier?.name?.charAt(0) || "U"}
+      </div>
+      <div>
+        <div className="text-sm font-semibold" style={{ color: "#e0d8f8" }}>
+          {cashier?.name || "Unknown"}
+        </div>
+        <div className="text-xs" style={{ color: "#6b6b8a" }}>
+          {branch?.name || "Unknown Branch"}
+        </div>
+      </div>
+    </div>
+    <button
+      onClick={handleLogout}
+      className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+      style={{
+        backgroundColor: "#1a0d0d",
+        border: "1px solid #7f1d1d",
+        color: "#fca5a5",
+      }}
+    >
+      Logout
+    </button>
+  </div>
+
+  {/* Search Bar */}
+  <div className="p-4" style={{ borderBottom: "1px solid #14141f" }}>
           <input
             type="text"
             value={searchQuery}
