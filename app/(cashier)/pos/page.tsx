@@ -12,15 +12,19 @@ import {
 import { ProductCard } from "@/components/pos/product-card";
 import { CartLine } from "@/components/pos/cart-line";
 import { PaymentModal } from "@/components/pos/payment-modal";
+import { SyncStatus } from "@/components/shared/sync-status";
 import { fmt } from "@/lib/utils";
 import { saveTransaction } from "@/lib/db/transactions";
 import { generateReceiptNumber } from "@/lib/utils";
 import { getStoredTerminalId } from "@/lib/auth/helpers";
+import { startBackgroundSync, stopBackgroundSync } from "@/lib/sync/background-sync";
+import { useNetworkStatus } from "@/hooks/use-network-status";
 
 export default function POSPage() {
   // Get the entire store, not destructured
   const authStore = useAuthStore();
   const cartStore = useCartStore();
+  const isOnline = useNetworkStatus();
 
   const [products, setProducts] = useState<IDBProduct[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -39,41 +43,54 @@ export default function POSPage() {
   const discount = cartStore.discount;
   const totals = cartStore.getTotals();
 
+  // Initialize data
   useEffect(() => {
-  async function loadData() {
-    // Don't load until we have a branch
-    if (!branch?.id) {
-      console.log("Waiting for branch to load...");
-      return;
+    async function loadData() {
+      // Don't load until we have a branch
+      if (!branch?.id) {
+        console.log("Waiting for branch to load...");
+        return;
+      }
+
+      try {
+        console.log("Loading POS data for branch:", branch.id);
+
+        // Sync products from Supabase
+        const { syncProductsFromServer } = await import("@/lib/db/products");
+        const syncedCount = await syncProductsFromServer(branch.id);
+        console.log(`Synced ${syncedCount} products`);
+
+        // Load categories
+        const cats = await getAllCategories();
+        setCategories(cats);
+        console.log("Categories loaded:", cats);
+
+        // Load products
+        const prods = await getProductsByCategory("All");
+        setProducts(prods);
+        console.log("Products loaded:", prods.length);
+
+        setIsInitialized(true);
+      } catch (error) {
+        console.error("Failed to load data:", error);
+        setIsInitialized(true); // Still set initialized even on error
+      }
     }
 
-    try {
-      console.log("Loading POS data for branch:", branch.id);
+    loadData();
+  }, [branch?.id]);
 
-      // Sync products from Supabase
-      const { syncProductsFromServer } = await import("@/lib/db/products");
-      const syncedCount = await syncProductsFromServer(branch.id);
-      console.log(`Synced ${syncedCount} products`);
+  // Start background sync
+  useEffect(() => {
+    console.log("Starting background sync service...");
+    startBackgroundSync();
+    
+    return () => {
+      console.log("Stopping background sync service...");
+      stopBackgroundSync();
+    };
+  }, []);
 
-      // Load categories
-      const cats = await getAllCategories();
-      setCategories(cats);
-      console.log("Categories loaded:", cats);
-
-      // Load products
-      const prods = await getProductsByCategory("All");
-      setProducts(prods);
-      console.log("Products loaded:", prods.length);
-
-      setIsInitialized(true);
-    } catch (error) {
-      console.error("Failed to load data:", error);
-      setIsInitialized(true); // Still set initialized even on error
-    }
-  }
-
-  loadData();
-}, [branch?.id]); // Only run when branch.id changes
   async function handleCategoryChange(category: string) {
     setActiveCategory(category);
     const prods = await getProductsByCategory(category);
@@ -100,7 +117,8 @@ export default function POSPage() {
     }
 
     try {
-      const terminalId = terminal?.id || (await getStoredTerminalId()) || "temp-id";
+      const terminalId =
+        terminal?.id || (await getStoredTerminalId()) || "temp-id";
       const receiptNumber = generateReceiptNumber(branch.code, 1);
 
       console.log("Saving transaction:", { terminalId, receiptNumber });
@@ -145,17 +163,17 @@ export default function POSPage() {
     }
   }
 
- function handleNewSale() {
-  cartStore.clear();
-  setShowReceipt(false);
-}
+  function handleNewSale() {
+    cartStore.clear();
+    setShowReceipt(false);
+  }
 
-async function handleLogout() {
-  const { clearSession } = await import("@/lib/auth/helpers");
-  await clearSession();
-  authStore.logout();
-  window.location.href = "/login";
-}
+  async function handleLogout() {
+    const { clearSession } = await import("@/lib/auth/helpers");
+    await clearSession();
+    authStore.logout();
+    window.location.href = "/login";
+  }
 
   // Show loading only if data isn't initialized
   if (!isInitialized) {
@@ -178,43 +196,71 @@ async function handleLogout() {
   return (
     <div className="pos-screen">
       {/* LEFT: Product Grid */}
-<div className="flex-1 flex flex-col" style={{ backgroundColor: "#07070f" }}>
-  {/* Header with Cashier Info */}
-  <div
-    className="p-3 flex justify-between items-center"
-    style={{ borderBottom: "1px solid #14141f" }}
-  >
-    <div className="flex items-center gap-3">
       <div
-        className="w-10 h-10 rounded-full flex items-center justify-center text-lg"
-        style={{ backgroundColor: "#1f1040", color: "#a78bfa" }}
+        className="flex-1 flex flex-col"
+        style={{ backgroundColor: "#07070f" }}
       >
-        {cashier?.name?.charAt(0) || "U"}
-      </div>
-      <div>
-        <div className="text-sm font-semibold" style={{ color: "#e0d8f8" }}>
-          {cashier?.name || "Unknown"}
-        </div>
-        <div className="text-xs" style={{ color: "#6b6b8a" }}>
-          {branch?.name || "Unknown Branch"}
-        </div>
-      </div>
-    </div>
-    <button
-      onClick={handleLogout}
-      className="px-3 py-1.5 rounded-lg text-xs font-semibold"
-      style={{
-        backgroundColor: "#1a0d0d",
-        border: "1px solid #7f1d1d",
-        color: "#fca5a5",
-      }}
-    >
-      Logout
-    </button>
-  </div>
+        {/* Header with Cashier Info and Sync Status */}
+        <div
+          className="p-3 flex justify-between items-center"
+          style={{ borderBottom: "1px solid #14141f" }}
+        >
+          {/* Left: Cashier Info */}
+          <div className="flex items-center gap-3">
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold"
+              style={{ backgroundColor: "#1f1040", color: "#a78bfa" }}
+            >
+              {cashier?.name?.charAt(0) || "U"}
+            </div>
+            <div>
+              <div className="text-sm font-semibold" style={{ color: "#e0d8f8" }}>
+                {cashier?.name || "Unknown"}
+              </div>
+              <div className="text-xs" style={{ color: "#6b6b8a" }}>
+                {branch?.name || "Unknown Branch"}
+              </div>
+            </div>
+          </div>
 
-  {/* Search Bar */}
-  <div className="p-4" style={{ borderBottom: "1px solid #14141f" }}>
+          {/* Right: Sync Status, Network, Logout */}
+          <div className="flex items-center gap-3">
+            {/* Sync Status Component */}
+            <SyncStatus />
+
+            {/* Network Status Indicator */}
+            <div
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold"
+              style={{
+                backgroundColor: isOnline ? "#0d2010" : "#1a0d0d",
+                border: `1px solid ${isOnline ? "#166534" : "#7f1d1d"}`,
+                color: isOnline ? "#86efac" : "#fca5a5",
+              }}
+            >
+              <div
+                className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: isOnline ? "#22c55e" : "#ef4444" }}
+              />
+              {isOnline ? "Online" : "Offline"}
+            </div>
+
+            {/* Logout Button */}
+            <button
+              onClick={handleLogout}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+              style={{
+                backgroundColor: "#1a0d0d",
+                border: "1px solid #7f1d1d",
+                color: "#fca5a5",
+              }}
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+
+        {/* Search Bar */}
+        <div className="p-4" style={{ borderBottom: "1px solid #14141f" }}>
           <input
             type="text"
             value={searchQuery}
@@ -339,7 +385,9 @@ async function handleLogout() {
                 <CartLine
                   key={item.productId}
                   item={item}
-                  onUpdateQty={(qty) => cartStore.updateQuantity(item.productId, qty)}
+                  onUpdateQty={(qty) =>
+                    cartStore.updateQuantity(item.productId, qty)
+                  }
                   onUpdateDiscount={(disc) =>
                     cartStore.updateDiscount(item.productId, disc)
                   }
