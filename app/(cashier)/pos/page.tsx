@@ -40,27 +40,40 @@ export default function POSPage() {
   const totals = cartStore.getTotals();
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        const cats = await getAllCategories();
-        setCategories(cats);
-
-        const prods = await getProductsByCategory("All");
-        setProducts(prods);
-
-        console.log("POS initialized with auth:", { 
-          hasCashier: !!authStore.cashier, 
-          hasBranch: !!authStore.branch 
-        });
-      } catch (error) {
-        console.error("Failed to load data:", error);
-      } finally {
-        setIsInitialized(true);
-      }
+  async function loadData() {
+    // Don't load until we have a branch
+    if (!branch?.id) {
+      console.log("Waiting for branch to load...");
+      return;
     }
-    loadData();
-  }, []);
 
+    try {
+      console.log("Loading POS data for branch:", branch.id);
+
+      // Sync products from Supabase
+      const { syncProductsFromServer } = await import("@/lib/db/products");
+      const syncedCount = await syncProductsFromServer(branch.id);
+      console.log(`Synced ${syncedCount} products`);
+
+      // Load categories
+      const cats = await getAllCategories();
+      setCategories(cats);
+      console.log("Categories loaded:", cats);
+
+      // Load products
+      const prods = await getProductsByCategory("All");
+      setProducts(prods);
+      console.log("Products loaded:", prods.length);
+
+      setIsInitialized(true);
+    } catch (error) {
+      console.error("Failed to load data:", error);
+      setIsInitialized(true); // Still set initialized even on error
+    }
+  }
+
+  loadData();
+}, [branch?.id]); // Only run when branch.id changes
   async function handleCategoryChange(category: string) {
     setActiveCategory(category);
     const prods = await getProductsByCategory(category);
