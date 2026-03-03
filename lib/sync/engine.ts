@@ -1,4 +1,5 @@
 import { db } from "@/lib/db/schema";
+
 import {
   getPendingTransactions,
   updateTransactionSyncStatus,
@@ -37,87 +38,80 @@ export async function syncTransactionsToServer(): Promise<SyncResult> {
 
     console.log(`Syncing ${pending.length} transactions...`);
 
+    // Mark all as syncing
     for (const txn of pending) {
-      try {
-        await updateTransactionSyncStatus(txn.id, "syncing");
+      await updateTransactionSyncStatus(txn.id, "syncing");
+    }
 
-        // Prepare transaction data for server
-        const serverData = {
-          id: txn.id,
-          type: txn.type,
-          branch_id: txn.branchId,
-          terminal_id: txn.terminalId,
-          cashier_id: txn.cashierId,
-          customer_id: txn.customer?.id || null,
-          receipt_number: txn.receiptNumber,
-          subtotal: txn.subtotal,
-          discount: txn.discountAmt,
-          tax: txn.tax,
-          total: txn.total,
-          payment_method: txn.payment.method,
-          payment_data: JSON.stringify(txn.payment),
-          note: txn.note || null,
-          status: txn.status,
-          completed_at: txn.completedAt,
-          version: txn.localVersion,
-        };
+    // Prepare transaction data
+    const transactionsData = pending.map((txn) => ({
+      id: txn.id,
+      type: txn.type,
+      branchId: txn.branchId,
+      terminalId: txn.terminalId,
+      cashierId: txn.cashierId,
+      customer: txn.customer,
+      receiptNumber: txn.receiptNumber,
+      items: txn.items,
+      payment: txn.payment,
+      subtotal: txn.subtotal,
+      discountAmt: txn.discountAmt,
+      tax: txn.tax,
+      total: txn.total,
+      note: txn.note,
+      status: txn.status,
+      completedAt: txn.completedAt,
+      localVersion: txn.localVersion,
+    }));
 
-        // Insert transaction
-        const { error: txnError } = await supabase
-          .from("transactions")
-          .upsert(serverData, {
-            onConflict: "id",
-            ignoreDuplicates: false,
-          });
+    // Send to API
+    const response = await fetch("/api/sync/transactions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(transactionsData),
+    });
 
-        if (txnError) throw txnError;
+    if (!response.ok) {
+      throw new Error(`Sync failed: ${response.statusText}`);
+    }
 
-        // Insert transaction items
-        const items = txn.items.map((item) => ({
-          transaction_id: txn.id,
-          product_id: item.productId,
-          product_name: item.name,
-          price: item.price,
-          qty: item.qty,
-          discount: item.discount,
-          tax_rate: item.taxRate,
-          line_total: item.lineTotal,
-        }));
+    const data = await response.json();
 
-        const { error: itemsError } = await supabase
-          .from("transaction_items")
-          .upsert(items, {
-            onConflict: "id",
-            ignoreDuplicates: false,
-          });
-
-        if (itemsError) throw itemsError;
-
-        // Update local status to synced
+    // Update local status based on server response
+    for (const txn of pending) {
+      const wasSuccessful = !data.errors.find((e: any) => e.id === txn.id);
+      
+      if (wasSuccessful) {
         await updateTransactionSyncStatus(txn.id, "synced");
-        result.synced++;
-
-        console.log(`✓ Synced transaction ${txn.receiptNumber}`);
-      } catch (error) {
-        console.error(`✗ Failed to sync transaction ${txn.id}:`, error);
-        await updateTransactionSyncStatus(
-          txn.id,
-          "failed",
-          (error as Error).message
-        );
-        result.failed++;
-        result.errors.push({
-          id: txn.id,
-          error: (error as Error).message,
-        });
+      } else {
+        const error = data.errors.find((e: any) => e.id === txn.id);
+        await updateTransactionSyncStatus(txn.id, "failed", error?.error);
       }
     }
 
-    result.success = result.failed === 0;
+    result.synced = data.synced;
+    result.failed = data.failed;
+    result.errors = data.errors;
+    result.success = data.success;
+
+    console.log(`✓ Sync completed: ${result.synced} synced, ${result.failed} failed`);
+    
     return result;
   } catch (error) {
     console.error("Sync engine error:", error);
+    
+    // Mark all as failed
+    const pending = await getPendingTransactions();
+    for (const txn of pending) {
+      if (txn.syncStatus === "syncing") {
+        await updateTransactionSyncStatus(txn.id, "failed", (error as Error).message);
+      }
+    }
+    
     result.success = false;
+    result.failed = pending.length;
     return result;
   }
 }
