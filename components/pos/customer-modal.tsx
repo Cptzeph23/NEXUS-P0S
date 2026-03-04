@@ -41,22 +41,28 @@ export function CustomerModal({ tenantId, onSelect, onClose }: CustomerModalProp
   }
 
   async function handleCreate() {
-    if (!newCustomer.name.trim()) {
-      alert("Customer name is required");
-      return;
-    }
-
-    try {
-      const customer = await createCustomer({
-        ...newCustomer,
-        tenantId,
-      });
-      onSelect(customer);
-    } catch (error) {
-      console.error("Create error:", error);
-      alert("Failed to create customer");
-    }
+  if (!newCustomer.name.trim()) {
+    alert("Customer name is required");
+    return;
   }
+
+  try {
+    console.log("Creating customer with data:", { ...newCustomer, tenantId });
+    
+    const customer = await createCustomer({
+      name: newCustomer.name.trim(),
+      email: newCustomer.email.trim() || undefined,
+      phone: newCustomer.phone.trim() || undefined,
+      tenantId,
+    });
+    
+    console.log("Customer created:", customer);
+    onSelect(customer);
+  } catch (error) {
+    console.error("Create error:", error);
+    alert("Failed to create customer: " + (error as Error).message);
+  }
+}
 
   return (
     <div

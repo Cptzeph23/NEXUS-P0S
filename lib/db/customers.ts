@@ -1,15 +1,13 @@
 import { db, type IDBCustomerCache } from "./schema";
-import { supabase } from "@/lib/supabase/client";
 import type { Customer } from "@/types";
 import { normalizeSearchKey } from "@/lib/utils";
-import { v4 as uuid } from "uuid";
 
 export async function searchCustomers(
   query: string
 ): Promise<IDBCustomerCache[]> {
   const normalized = normalizeSearchKey(query);
 
-  // Search in local cache
+  // Search in local cache first
   const local = await db.customers
     .filter(
       (c) =>
@@ -24,75 +22,45 @@ export async function searchCustomers(
     return local;
   }
 
-  // If not found locally, search server
-  const { data, error } = await supabase
-    .from("customers")
-    .select("*")
-    .or(
-      `name.ilike.%${query}%,email.ilike.%${query}%,phone.ilike.%${query}%`
-    )
-    .limit(10);
+  // Search via API
+  try {
+    const response = await fetch(`/api/customers?q=${encodeURIComponent(query)}`);
+    if (!response.ok) {
+      throw new Error("Search failed");
+    }
 
-  if (error) {
+    const { customers } = await response.json();
+
+    // Cache results
+    const idbCustomers: IDBCustomerCache[] = customers.map((c: any) => ({
+      id: c.id,
+      tenantId: c.tenantId,
+      name: c.name,
+      email: c.email,
+      phone: c.phone,
+      loyaltyPoints: c.loyaltyPoints,
+      totalSpent: c.totalSpent,
+      totalVisits: c.totalVisits,
+      createdAt: c.createdAt,
+      searchKey: normalizeSearchKey(
+        c.name + " " + (c.email || "") + " " + (c.phone || "")
+      ),
+    }));
+
+    await db.customers.bulkPut(idbCustomers);
+
+    return idbCustomers;
+  } catch (error) {
     console.error("Customer search error:", error);
     return [];
   }
-
-  // Cache results
-  const customers: IDBCustomerCache[] = data.map((c: any) => ({
-    id: c.id,
-    tenantId: c.tenant_id,
-    name: c.name,
-    email: c.email,
-    phone: c.phone,
-    loyaltyPoints: c.loyalty_points,
-    totalSpent: parseFloat(c.total_spent),
-    totalVisits: c.total_visits,
-    createdAt: c.created_at,
-    searchKey: normalizeSearchKey(c.name + " " + (c.email || "") + " " + (c.phone || "")),
-  }));
-
-  await db.customers.bulkPut(customers);
-
-  return customers;
 }
 
 export async function getCustomerById(
   id: string
 ): Promise<IDBCustomerCache | undefined> {
   // Try local first
-  let customer = await db.customers.get(id);
-
-  if (customer) {
-    return customer;
-  }
-
-  // Fetch from server
-  const { data, error } = await supabase
-    .from("customers")
-    .select("*")
-    .eq("id", id)
-    .single();
-
-  if (error || !data) {
-    return undefined;
-  }
-
-  customer = {
-    id: data.id,
-    tenantId: data.tenant_id,
-    name: data.name,
-    email: data.email,
-    phone: data.phone,
-    loyaltyPoints: data.loyalty_points,
-    totalSpent: parseFloat(data.total_spent),
-    totalVisits: data.total_visits,
-    createdAt: data.created_at,
-    searchKey: normalizeSearchKey(data.name),
-  };
-
-  await db.customers.put(customer);
-
+  const customer = await db.customers.get(id);
   return customer;
 }
 
@@ -102,43 +70,42 @@ export async function createCustomer(data: {
   phone?: string;
   tenantId: string;
 }): Promise<IDBCustomerCache> {
-  const customer = {
-    id: uuid(),
-    tenant_id: data.tenantId,
-    name: data.name,
-    email: data.email || null,
-    phone: data.phone || null,
-    loyalty_points: 0,
-    total_spent: 0,
-    total_visits: 0,
-  };
+  try {
+    const response = await fetch("/api/customers", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    });
 
-  const { data: created, error } = await supabase
-    .from("customers")
-    .insert(customer)
-    .select()
-    .single();
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to create customer");
+    }
 
-  if (error) {
+    const { customer } = await response.json();
+
+    const idbCustomer: IDBCustomerCache = {
+      id: customer.id,
+      tenantId: customer.tenantId,
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone,
+      loyaltyPoints: customer.loyaltyPoints,
+      totalSpent: customer.totalSpent,
+      totalVisits: customer.totalVisits,
+      createdAt: customer.createdAt,
+      searchKey: normalizeSearchKey(customer.name),
+    };
+
+    await db.customers.put(idbCustomer);
+
+    return idbCustomer;
+  } catch (error) {
+    console.error("Create customer error:", error);
     throw error;
   }
-
-  const idbCustomer: IDBCustomerCache = {
-    id: created.id,
-    tenantId: created.tenant_id,
-    name: created.name,
-    email: created.email,
-    phone: created.phone,
-    loyaltyPoints: created.loyalty_points,
-    totalSpent: parseFloat(created.total_spent),
-    totalVisits: created.total_visits,
-    createdAt: created.created_at,
-    searchKey: normalizeSearchKey(created.name),
-  };
-
-  await db.customers.put(idbCustomer);
-
-  return idbCustomer;
 }
 
 export async function updateCustomerStats(
