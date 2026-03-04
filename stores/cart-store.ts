@@ -1,11 +1,11 @@
 import { create } from "zustand";
-import type { CartItem, CartTotals, PaymentDetails } from "@/types";
+import type { CartItem, CartTotals, PaymentDetails, CustomerRef } from "@/types";
 import { calcCartTotals, calcLineTotal, calcLineTax } from "@/lib/utils";
 
 interface CartState {
   items: CartItem[];
   discount: number;
-  customer: { id: string; name: string } | null;
+  customer: CustomerRef | null;
   note: string;
 
   addItem: (product: {
@@ -19,6 +19,7 @@ interface CartState {
   updateQuantity: (productId: string, qty: number) => void;
   updateDiscount: (productId: string, discount: number) => void;
   setCartDiscount: (discount: number) => void;
+  setCustomer: (customer: CustomerRef | null) => void;
   setNote: (note: string) => void;
   getTotals: () => CartTotals;
   clear: () => void;
@@ -113,6 +114,10 @@ export const useCartStore = create<CartState>((set, get) => ({
 
   setCartDiscount: (discount) => {
     set({ discount: Math.min(discount, 100) });
+  },
+
+  setCustomer: (customer) => {
+    set({ customer });
   },
 
   setNote: (note) => {
