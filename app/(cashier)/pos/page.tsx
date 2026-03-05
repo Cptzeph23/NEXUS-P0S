@@ -14,7 +14,6 @@ import { CartLine } from "@/components/pos/cart-line";
 import { PaymentModal } from "@/components/pos/payment-modal";
 import { CustomerModal } from "@/components/pos/customer-modal";
 import { SyncStatus } from "@/components/shared/sync-status";
-import { LowStockAlert } from "@/components/shared/low-stock-alert";
 import { fmt } from "@/lib/utils";
 import { saveTransaction } from "@/lib/db/transactions";
 import { generateReceiptNumber } from "@/lib/utils";
@@ -22,6 +21,11 @@ import { getStoredTerminalId } from "@/lib/auth/helpers";
 import { startBackgroundSync, stopBackgroundSync } from "@/lib/sync/background-sync";
 import { updateLocalStock } from "@/lib/db/stock";
 import { updateCustomerStats } from "@/lib/db/customers";
+import { CustomerSearch } from "@/components/pos/customer-search";
+import { LowStockAlert } from "@/components/pos/low-stock-alert";
+import { updateStockAfterSale } from "@/lib/inventory/stock";
+import { updateCustomerAfterPurchase } from "@/lib/customers";
+import type { Customer } from "@/types";
 
 export default function POSPage() {
   // Get the entire store, not destructured
