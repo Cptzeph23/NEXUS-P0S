@@ -8,9 +8,7 @@ interface LowStockAlertProps {
 }
 
 export function LowStockAlert({ branchId }: LowStockAlertProps) {
-  const [lowStock, setLowStock] = useState
-    Array<{ productId: string; name: string; stock: number; reorderPoint: number }>
-  >([]);
+  const [lowStock, setLowStock] = useState<Array<{ productId: string; name: string; stock: number; reorderPoint: number }>>([]);
   const [showAlert, setShowAlert] = useState(false);
 
   useEffect(() => {
@@ -21,7 +19,7 @@ export function LowStockAlert({ branchId }: LowStockAlertProps) {
     }
 
     checkStock();
-    const interval = setInterval(checkStock, 60_000); // Check every minute
+    const interval = setInterval(checkStock, 60_000);
     return () => clearInterval(interval);
   }, [branchId]);
 

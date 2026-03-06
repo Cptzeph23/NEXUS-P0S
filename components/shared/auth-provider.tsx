@@ -14,28 +14,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
-  const { setInitialized, setTerminal, setBranch, logout } = useAuthStore();
+  const authStore = useAuthStore();
 
   useEffect(() => {
     async function initializeAuth() {
-      try {
-        // Skip auth check for public routes
-        if (pathname === "/boot" || pathname === "/login") {
-          setIsLoading(false);
-          return;
-        }
+      // Skip auth check for public routes
+      if (pathname === "/boot" || pathname === "/login") {
+        setIsLoading(false);
+        return;
+      }
 
+      try {
         const deviceId = await getOrCreateDeviceId();
         const terminalId = await getStoredTerminalId();
         const branchId = await getStoredBranchId();
         const sessionId = await getStoredSessionId();
 
-        console.log("Auth check:", { 
-          deviceId: !!deviceId, 
-          terminalId: !!terminalId, 
+        console.log("Auth check:", {
+          deviceId: !!deviceId,
+          terminalId: !!terminalId,
           branchId: !!branchId,
           sessionId: !!sessionId,
-          pathname 
+          pathname,
         });
 
         // No terminal registered
@@ -59,16 +59,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const response = await fetch(`/api/terminal/${terminalId}`);
           if (response.ok) {
             const data = await response.json();
-            setTerminal(data.terminal);
-            setBranch(data.branch);
-            console.log("Auth initialized:", { 
-              terminal: data.terminal.name, 
-              branch: data.branch.name 
+            authStore.setTerminal(data.terminal);
+            authStore.setBranch(data.branch);
+            console.log("Auth initialized:", {
+              terminal: data.terminal.name,
+              branch: data.branch.name,
             });
           } else {
             // Terminal not found, clear and re-register
             console.log("Terminal not found in database");
-            logout();
+            authStore.logout();
             router.replace("/boot");
             setIsLoading(false);
             return;
@@ -80,10 +80,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        setInitialized(true);
+        authStore.setInitialized(true);
       } catch (error) {
         console.error("Auth initialization error:", error);
-        logout();
+        authStore.logout();
         router.replace("/boot");
       } finally {
         setIsLoading(false);
@@ -91,7 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     initializeAuth();
-  }, [pathname, router, setInitialized, setTerminal, setBranch, logout]);
+  }, [pathname, router, authStore]);
 
   if (isLoading) {
     return (

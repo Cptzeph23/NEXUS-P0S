@@ -12,17 +12,14 @@ import {
 import { ProductCard } from "@/components/pos/product-card";
 import { CartLine } from "@/components/pos/cart-line";
 import { PaymentModal } from "@/components/pos/payment-modal";
-import { CustomerModal } from "@/components/pos/customer-modal";
 import { SyncStatus } from "@/components/shared/sync-status";
+import { CustomerSearch } from "@/components/pos/customer-search";
+import { LowStockAlert } from "@/components/pos/low-stock-alert";
 import { fmt } from "@/lib/utils";
 import { saveTransaction } from "@/lib/db/transactions";
 import { generateReceiptNumber } from "@/lib/utils";
 import { getStoredTerminalId } from "@/lib/auth/helpers";
 import { startBackgroundSync, stopBackgroundSync } from "@/lib/sync/background-sync";
-import { updateLocalStock } from "@/lib/db/stock";
-import { updateCustomerStats } from "@/lib/db/customers";
-import { CustomerSearch } from "@/components/pos/customer-search";
-import { LowStockAlert } from "@/components/pos/low-stock-alert";
 import { updateStockAfterSale } from "@/lib/inventory/stock";
 import { updateCustomerAfterPurchase } from "@/lib/customers";
 import type { Customer } from "@/types";
@@ -32,11 +29,31 @@ export default function POSPage() {
   const authStore = useAuthStore();
   const cartStore = useCartStore();
 
-  // Network status (inline)
+  // Network status (inline) - MUST be called first
   const [isOnline, setIsOnline] = useState(
     typeof window !== "undefined" ? navigator.onLine : true
   );
 
+  // All state declarations together - MUST be in consistent order
+  const [products, setProducts] = useState<IDBProduct[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [activeCategory, setActiveCategory] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showPayment, setShowPayment] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [lastReceipt, setLastReceipt] = useState<any>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+
+  // Access values from store
+  const cashier = authStore.cashier;
+  const branch = authStore.branch;
+  const terminal = authStore.terminal;
+  const items = cartStore.items;
+  const discount = cartStore.discount;
+  const totals = cartStore.getTotals();
+
+  // Network status effect - Effect 1
   useEffect(() => {
     function handleOnline() {
       setIsOnline(true);
@@ -54,26 +71,7 @@ export default function POSPage() {
     };
   }, []);
 
-  const [products, setProducts] = useState<IDBProduct[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [activeCategory, setActiveCategory] = useState("All");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showPayment, setShowPayment] = useState(false);
-  const [showReceipt, setShowReceipt] = useState(false);
-  const [showCustomerModal, setShowCustomerModal] = useState(false);
-  const [lastReceipt, setLastReceipt] = useState<any>(null);
-  const [isInitialized, setIsInitialized] = useState(false);
-
-  // Access values from store
-  const cashier = authStore.cashier;
-  const branch = authStore.branch;
-  const terminal = authStore.terminal;
-  const items = cartStore.items;
-  const discount = cartStore.discount;
-  const customer = cartStore.customer;
-  const totals = cartStore.getTotals();
-
-  // Initialize data
+  // Initialize data - Effect 2
   useEffect(() => {
     async function loadData() {
       // Don't load until we have a branch
@@ -89,11 +87,6 @@ export default function POSPage() {
         const { syncProductsFromServer } = await import("@/lib/db/products");
         const syncedCount = await syncProductsFromServer(branch.id);
         console.log(`Synced ${syncedCount} products`);
-
-        // Sync stock levels
-        const { syncStockLevelsFromServer } = await import("@/lib/db/stock");
-        const stockCount = await syncStockLevelsFromServer(branch.id);
-        console.log(`Synced ${stockCount} stock levels`);
 
         // Load categories
         const cats = await getAllCategories();
@@ -115,7 +108,7 @@ export default function POSPage() {
     loadData();
   }, [branch?.id]);
 
-  // Start background sync
+  // Start background sync - Effect 3
   useEffect(() => {
     console.log("Starting background sync service...");
     startBackgroundSync();
@@ -164,7 +157,9 @@ export default function POSPage() {
         branchId: branch.id,
         cashierId: cashier.id,
         cashierName: cashier.name,
-        customer: customer ? { id: customer.id, name: customer.name } : undefined,
+        customer: selectedCustomer
+          ? { id: selectedCustomer.id, name: selectedCustomer.name }
+          : undefined,
         receiptNumber,
         items: cartStore.items,
         payment: {
@@ -185,22 +180,22 @@ export default function POSPage() {
       console.log("Transaction saved:", transaction.id);
 
       // Update stock levels
-      for (const item of cartStore.items) {
-        await updateLocalStock(branch.id, item.productId, -item.qty);
-      }
+      await updateStockAfterSale(branch.id, cartStore.items);
 
-      // Update customer stats if customer is attached
-      if (customer) {
-        await updateCustomerStats(customer.id, totals.total);
+      // Update customer stats if customer selected
+      if (selectedCustomer) {
+        await updateCustomerAfterPurchase(selectedCustomer.id, totals.total);
       }
 
       setLastReceipt({
         ...transaction,
         payment,
         branch: branch.name,
+        customer: selectedCustomer,
       });
 
       cartStore.clear();
+      setSelectedCustomer(null);
       setShowPayment(false);
       setShowReceipt(true);
     } catch (error) {
@@ -211,6 +206,7 @@ export default function POSPage() {
 
   function handleNewSale() {
     cartStore.clear();
+    setSelectedCustomer(null);
     setShowReceipt(false);
   }
 
@@ -412,45 +408,13 @@ export default function POSPage() {
           )}
         </div>
 
-        {/* Customer Section */}
-        <div className="p-4" style={{ borderBottom: "1px solid #14141f" }}>
-          {customer ? (
-            <div
-              className="flex items-center justify-between p-3 rounded-lg"
-              style={{
-                backgroundColor: "#0d2010",
-                border: "1px solid #166534",
-              }}
-            >
-              <div>
-                <div className="text-sm font-semibold" style={{ color: "#86efac" }}>
-                  {customer.name}
-                </div>
-                <div className="text-xs mt-1" style={{ color: "#4ade80" }}>
-                  Customer attached
-                </div>
-              </div>
-              <button
-                onClick={() => cartStore.setCustomer(null)}
-                className="text-sm"
-                style={{ color: "#fca5a5" }}
-              >
-                ✕
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowCustomerModal(true)}
-              className="w-full py-3 rounded-lg font-semibold text-sm"
-              style={{
-                backgroundColor: "#0f0f1c",
-                border: "1px solid #2a2a3f",
-                color: "#9090b0",
-              }}
-            >
-              + Add Customer
-            </button>
-          )}
+        {/* Customer Search */}
+        <div className="px-4 pt-3">
+          <CustomerSearch
+            tenantId={branch?.tenantId || "01936d9e-8f5a-4b2c-9d3e-1234567890ab"}
+            onSelect={setSelectedCustomer}
+            selectedCustomer={selectedCustomer}
+          />
         </div>
 
         {/* Cart Items */}
@@ -551,18 +515,6 @@ export default function POSPage() {
         />
       )}
 
-      {/* Customer Modal */}
-      {showCustomerModal && branch && (
-        <CustomerModal
-          tenantId={branch.tenantId}
-          onSelect={(c) => {
-            cartStore.setCustomer({ id: c.id, name: c.name });
-            setShowCustomerModal(false);
-          }}
-          onClose={() => setShowCustomerModal(false)}
-        />
-      )}
-
       {/* Receipt Modal */}
       {showReceipt && lastReceipt && (
         <div
@@ -586,7 +538,7 @@ export default function POSPage() {
               <div className="text-xs">{new Date().toLocaleString()}</div>
               <div className="text-xs mt-1">{lastReceipt.receiptNumber}</div>
               {lastReceipt.customer && (
-                <div className="text-xs mt-2">
+                <div className="text-xs mt-1">
                   Customer: {lastReceipt.customer.name}
                 </div>
               )}
@@ -639,7 +591,7 @@ export default function POSPage() {
       )}
 
       {/* Low Stock Alert */}
-      {branch && <LowStockAlert branchId={branch.id} />}
+      {branch?.id && <LowStockAlert branchId={branch.id} />}
     </div>
   );
 }
