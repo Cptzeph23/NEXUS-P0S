@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/components/shared/auth-provider";
 import { ToastNotification } from "@/components/shared/toast-notification";
+import { PWAInstallPrompt } from "@/components/shared/pwa-install-prompt";
 
 export const metadata: Metadata = {
   title: "Nexus POS",
@@ -30,6 +31,7 @@ export default function RootLayout({
       <body suppressHydrationWarning>
         <AuthProvider>{children}</AuthProvider>
         <ToastNotification />
+        <PWAInstallPrompt />
       </body>
     </html>
   );
