@@ -1,7 +1,11 @@
 "use client";
 
+
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
+import { ShortcutsPanel } from "@/components/pos/shortcuts-panel";
 import { useNotificationStore } from "@/stores/notification-store";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCartStore } from "@/stores/cart-store";
 import { db, type IDBProduct } from "@/lib/db/schema";
@@ -45,7 +49,9 @@ export default function POSPage() {
   const [lastReceipt, setLastReceipt] = useState<any>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   // Access values from store
   const cashier = authStore.cashier;
   const branch = authStore.branch;
@@ -83,6 +89,98 @@ useEffect(() => {
     window.removeEventListener("offline", handleOffline);
   };
 }, [addNotification]);
+
+// Keyboard shortcuts
+useKeyboardShortcuts([
+  {
+    key: "F1",
+    action: () => setShowShortcuts(true),
+    description: "Show shortcuts",
+  },
+  {
+    key: "F2",
+    action: () => searchInputRef.current?.focus(),
+    description: "Focus search",
+  },
+  {
+    key: "F3",
+    action: () => {
+      if (items.length > 0) {
+        cartStore.clear();
+        addNotification({
+          type: "info",
+          message: "Cart cleared",
+          duration: 2000,
+        });
+      }
+    },
+    description: "Clear cart",
+  },
+  {
+    key: "F9",
+    action: () => {
+      if (items.length > 0) {
+        setShowPayment(true);
+      }
+    },
+    description: "Open payment",
+  },
+  {
+    key: "Escape",
+    action: () => {
+      setShowPayment(false);
+      setShowReceipt(false);
+    },
+    description: "Close modal",
+  },
+  {
+    key: "d",
+    ctrl: true,
+    action: () => {
+      window.location.href = "/dashboard";
+    },
+    description: "Dashboard",
+  },
+  {
+    key: "l",
+    ctrl: true,
+    action: handleLogout,
+    description: "Logout",
+  },
+]);
+
+// Barcode scanner
+useBarcodeScanner({
+  onScan: async (barcode) => {
+    console.log("Barcode scanned:", barcode);
+    const product = await getProductByBarcode(barcode);
+    
+    if (product) {
+      cartStore.addItem({
+        id: product.id,
+        barcode: product.barcode || "",
+        name: product.name,
+        price: product.price,
+        taxRate: product.taxRate,
+      });
+      
+      addNotification({
+        type: "success",
+        message: `Added ${product.name}`,
+        duration: 2000,
+      });
+    } else {
+      addNotification({
+        type: "error",
+        message: `Product not found: ${barcode}`,
+        duration: 3000,
+      });
+    }
+  },
+  minLength: 8,
+});
+
+
 
   // Initialize data - Effect 2
   useEffect(() => {
@@ -341,20 +439,21 @@ useEffect(() => {
         </div>
 
         {/* Search Bar */}
-        <div className="p-4" style={{ borderBottom: "1px solid #14141f" }}>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => handleSearch(e.target.value)}
-            placeholder="Search products or scan barcode..."
-            className="w-full px-4 py-3 rounded-lg"
-            style={{
-              backgroundColor: "#0f0f1c",
-              border: "1px solid #2a2a3f",
-              color: "#c8c0e0",
-            }}
-          />
-        </div>
+      <div className="p-4" style={{ borderBottom: "1px solid #14141f" }}>
+        <input
+          ref={searchInputRef}
+          type="text"
+          value={searchQuery}
+          onChange={(e) => handleSearch(e.target.value)}
+          placeholder="Search products or scan barcode..."
+          className="w-full px-4 py-3 rounded-lg"
+          style={{
+            backgroundColor: "#0f0f1c",
+            border: "1px solid #2a2a3f",
+            color: "#c8c0e0",
+        }}
+       />
+      </div>
 
         {/* Categories */}
         <div
@@ -627,6 +726,11 @@ useEffect(() => {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Shortcuts Panel */}
+      {showShortcuts && (
+        <ShortcutsPanel onClose={() => setShowShortcuts(false)} />
       )}
 
       {/* Low Stock Alert */}

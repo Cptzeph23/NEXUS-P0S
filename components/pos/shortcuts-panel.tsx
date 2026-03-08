@@ -2,8 +2,13 @@
 
 import { useState } from "react";
 
-export function ShortcutsPanel() {
-  const [isOpen, setIsOpen] = useState(false);
+export function ShortcutsPanel({ onClose }: { onClose?: () => void }) {
+  const [isOpen, setIsOpen] = useState(true);
+
+  function handleClose() {
+    setIsOpen(false);
+    onClose?.();
+  }
 
   const shortcuts = [
     { key: "F1", description: "Show shortcuts" },
