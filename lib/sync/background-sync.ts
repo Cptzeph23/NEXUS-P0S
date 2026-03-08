@@ -5,6 +5,7 @@ import {
   getPendingSyncCount,
 } from "./engine";
 import { useSyncStore } from "@/stores/sync-store";
+import { useNotificationStore } from "@/stores/notification-store";
 
 let syncInterval: ReturnType<typeof setInterval> | null = null;
 const SYNC_INTERVAL = 30_000; // 30 seconds
@@ -59,10 +60,24 @@ async function performSync() {
       const lastSync = await getLastSyncTime();
       setLastSyncAt(lastSync!);
       console.log(`✓ Sync completed: ${result.synced} synced, ${result.failed} failed`);
+      
+      // Show notification if transactions were synced
+      if (result.synced > 0) {
+        useNotificationStore.getState().addNotification({
+          type: "success",
+          message: `${result.synced} transaction${result.synced > 1 ? "s" : ""} synced successfully`,
+          duration: 3000,
+        });
+      }
     } else {
       console.warn(`Sync completed with errors: ${result.failed} failed`);
       if (result.errors.length > 0) {
         setLastError(result.errors[0].error);
+        useNotificationStore.getState().addNotification({
+          type: "error",
+          message: `Sync failed: ${result.errors[0].error}`,
+          duration: 5000,
+        });
       }
     }
 
@@ -72,6 +87,11 @@ async function performSync() {
   } catch (error) {
     console.error("Sync failed:", error);
     setLastError((error as Error).message);
+    useNotificationStore.getState().addNotification({
+      type: "error",
+      message: "Sync failed. Will retry...",
+      duration: 4000,
+    });
   } finally {
     setIsSyncing(false);
   }
