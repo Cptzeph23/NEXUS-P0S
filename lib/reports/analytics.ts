@@ -96,15 +96,7 @@ export async function getCashierPerformance(
     })
     .toArray();
 
-  const cashierStats: Record
-    string,
-    {
-      name: string;
-      transactions: number;
-      revenue: number;
-      avgTransaction: number;
-    }
-  > = {};
+  const cashierStats: Record<string, { name: string; transactions: number; revenue: number; avgTransaction: number }> = {};
 
   transactions.forEach((tx) => {
     if (!cashierStats[tx.cashierId]) {
