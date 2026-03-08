@@ -55,7 +55,7 @@ export default function POSPage() {
   const totals = cartStore.getTotals();
   const { addNotification } = useNotificationStore();
 
-  // Network status effect - Effect 1
+ 
   // Network status effect - Effect 1
 useEffect(() => {
   function handleOnline() {
