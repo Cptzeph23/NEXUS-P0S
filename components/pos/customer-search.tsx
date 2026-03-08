@@ -1,5 +1,6 @@
 "use client";
 
+import { useNotificationStore } from "@/stores/notification-store";
 import { useState, useEffect } from "react";
 import { searchCustomers, createCustomer } from "@/lib/customers";
 import type { Customer } from "@/types";
@@ -20,11 +21,13 @@ export function CustomerSearch({
   const [results, setResults] = useState<Customer[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const { addNotification } = useNotificationStore();
   const [isCreating, setIsCreating] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
     name: "",
     email: "",
     phone: "",
+  
   });
 
   useEffect(() => {
@@ -44,30 +47,44 @@ export function CustomerSearch({
   }, [query]);
 
   async function handleCreateCustomer() {
-    if (!newCustomer.name.trim()) {
-      alert("Customer name is required");
-      return;
-    }
-
-    setIsCreating(true);
-    try {
-      const customer = await createCustomer(tenantId, {
-        name: newCustomer.name.trim(),
-        email: newCustomer.email.trim() || undefined,
-        phone: newCustomer.phone.trim() || undefined,
-      });
-
-      onSelect(customer);
-      setShowCreate(false);
-      setNewCustomer({ name: "", email: "", phone: "" });
-      setQuery("");
-    } catch (error) {
-      console.error("Failed to create customer:", error);
-      alert("Failed to create customer");
-    } finally {
-      setIsCreating(false);
-    }
+  if (!newCustomer.name.trim()) {
+    addNotification({
+      type: "error",
+      message: "Customer name is required",
+      duration: 3000,
+    });
+    return;
   }
+
+  setIsCreating(true);
+  try {
+    const customer = await createCustomer(tenantId, {
+      name: newCustomer.name.trim(),
+      email: newCustomer.email.trim() || undefined,
+      phone: newCustomer.phone.trim() || undefined,
+    });
+
+    onSelect(customer);
+    setShowCreate(false);
+    setNewCustomer({ name: "", email: "", phone: "" });
+    setQuery("");
+    
+    addNotification({
+      type: "success",
+      message: `Customer "${customer.name}" created successfully`,
+      duration: 3000,
+    });
+  } catch (error) {
+    console.error("Failed to create customer:", error);
+    addNotification({
+      type: "error",
+      message: "Failed to create customer",
+      duration: 4000,
+    });
+  } finally {
+    setIsCreating(false);
+  }
+}
 
   if (selectedCustomer) {
     return (
