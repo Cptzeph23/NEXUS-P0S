@@ -1,5 +1,6 @@
 "use client";
 
+import { useNotificationStore } from "@/stores/notification-store";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCartStore } from "@/stores/cart-store";
@@ -44,7 +45,7 @@ export default function POSPage() {
   const [lastReceipt, setLastReceipt] = useState<any>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-
+  
   // Access values from store
   const cashier = authStore.cashier;
   const branch = authStore.branch;
@@ -52,6 +53,7 @@ export default function POSPage() {
   const items = cartStore.items;
   const discount = cartStore.discount;
   const totals = cartStore.getTotals();
+  const { addNotification } = useNotificationStore();
 
   // Network status effect - Effect 1
   useEffect(() => {
@@ -137,72 +139,85 @@ export default function POSPage() {
   }
 
   async function handlePaymentComplete(payment: any) {
-    console.log("Payment initiated:", payment);
+  console.log("Payment initiated:", payment);
 
-    if (!cashier || !branch) {
-      alert("Error: Session expired. Please log in again.");
-      return;
-    }
-
-    try {
-      const terminalId =
-        terminal?.id || (await getStoredTerminalId()) || "temp-id";
-      const receiptNumber = generateReceiptNumber(branch.code, 1);
-
-      console.log("Saving transaction:", { terminalId, receiptNumber });
-
-      const transaction = await saveTransaction({
-        type: "sale",
-        terminalId,
-        branchId: branch.id,
-        cashierId: cashier.id,
-        cashierName: cashier.name,
-        customer: selectedCustomer
-          ? { id: selectedCustomer.id, name: selectedCustomer.name }
-          : undefined,
-        receiptNumber,
-        items: cartStore.items,
-        payment: {
-          method: payment.method,
-          amount: payment.amount,
-          change: payment.change,
-        },
-        subtotal: totals.subtotal,
-        discount: cartStore.discount,
-        discountAmt: totals.cartDiscount,
-        tax: totals.tax,
-        total: totals.total,
-        status: "completed",
-        completedAt: new Date().toISOString(),
-        syncStatus: "pending",
-      });
-
-      console.log("Transaction saved:", transaction.id);
-
-      // Update stock levels
-      await updateStockAfterSale(branch.id, cartStore.items);
-
-      // Update customer stats if customer selected
-      if (selectedCustomer) {
-        await updateCustomerAfterPurchase(selectedCustomer.id, totals.total);
-      }
-
-      setLastReceipt({
-        ...transaction,
-        payment,
-        branch: branch.name,
-        customer: selectedCustomer,
-      });
-
-      cartStore.clear();
-      setSelectedCustomer(null);
-      setShowPayment(false);
-      setShowReceipt(true);
-    } catch (error) {
-      console.error("Payment error:", error);
-      alert("Payment failed: " + (error as Error).message);
-    }
+  if (!cashier || !branch) {
+    addNotification({
+      type: "error",
+      message: "Session expired. Please log in again.",
+    });
+    return;
   }
+
+  try {
+    const terminalId =
+      terminal?.id || (await getStoredTerminalId()) || "temp-id";
+    const receiptNumber = generateReceiptNumber(branch.code, 1);
+
+    console.log("Saving transaction:", { terminalId, receiptNumber });
+
+    const transaction = await saveTransaction({
+      type: "sale",
+      terminalId,
+      branchId: branch.id,
+      cashierId: cashier.id,
+      cashierName: cashier.name,
+      customer: selectedCustomer
+        ? { id: selectedCustomer.id, name: selectedCustomer.name }
+        : undefined,
+      receiptNumber,
+      items: cartStore.items,
+      payment: {
+        method: payment.method,
+        amount: payment.amount,
+        change: payment.change,
+      },
+      subtotal: totals.subtotal,
+      discount: cartStore.discount,
+      discountAmt: totals.cartDiscount,
+      tax: totals.tax,
+      total: totals.total,
+      status: "completed",
+      completedAt: new Date().toISOString(),
+      syncStatus: "pending",
+    });
+
+    console.log("Transaction saved:", transaction.id);
+
+    // Update stock levels
+    await updateStockAfterSale(branch.id, cartStore.items);
+
+    // Update customer stats if customer selected
+    if (selectedCustomer) {
+      await updateCustomerAfterPurchase(selectedCustomer.id, totals.total);
+    }
+
+    // Show success notification
+    addNotification({
+      type: "success",
+      message: `Sale completed! ${receiptNumber}`,
+      duration: 3000,
+    });
+
+    setLastReceipt({
+      ...transaction,
+      payment,
+      branch: branch.name,
+      customer: selectedCustomer,
+    });
+
+    cartStore.clear();
+    setSelectedCustomer(null);
+    setShowPayment(false);
+    setShowReceipt(true);
+  } catch (error) {
+    console.error("Payment error:", error);
+    addNotification({
+      type: "error",
+      message: "Payment failed: " + (error as Error).message,
+    });
+  }
+}
 
   function handleNewSale() {
     cartStore.clear();
