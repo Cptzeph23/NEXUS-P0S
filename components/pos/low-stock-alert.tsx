@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getLowStockProducts } from "@/lib/inventory/stock";
+import { useNotificationStore } from "@/stores/notification-store";
 
 interface LowStockAlertProps {
   branchId: string;
@@ -10,10 +11,27 @@ interface LowStockAlertProps {
 export function LowStockAlert({ branchId }: LowStockAlertProps) {
   const [lowStock, setLowStock] = useState<Array<{ productId: string; name: string; stock: number; reorderPoint: number }>>([]);
   const [showAlert, setShowAlert] = useState(false);
+  const { addNotification } = useNotificationStore();
 
   useEffect(() => {
     async function checkStock() {
       const items = await getLowStockProducts(branchId);
+      
+      // If new low stock items detected, show notification
+      if (items.length > lowStock.length) {
+        const newItems = items.filter(
+          (item) => !lowStock.some((old) => old.productId === item.productId)
+        );
+        
+        if (newItems.length > 0) {
+          addNotification({
+            type: "warning",
+            message: `${newItems.length} product${newItems.length > 1 ? "s" : ""} running low on stock`,
+            duration: 5000,
+          });
+        }
+      }
+      
       setLowStock(items);
       setShowAlert(items.length > 0);
     }
