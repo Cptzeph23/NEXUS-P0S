@@ -420,7 +420,7 @@ useBarcodeScanner({
                 color: "#a78bfa",
               }}
             >
-              📊 Dashboard
+              Dashboard
             </button>
 
             {/* Logout Button */}

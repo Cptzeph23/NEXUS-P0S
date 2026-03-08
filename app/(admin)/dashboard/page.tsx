@@ -96,25 +96,25 @@ export default function DashboardPage() {
           title="Today's Revenue"
           value={todaySales?.totalRevenue || 0}
           subtitle={`${todaySales?.totalTransactions || 0} transactions`}
-          icon="💰"
+          icon=""
         />
         <SalesCard
           title="Net Revenue"
           value={todaySales?.netRevenue || 0}
           subtitle={`After ${fmt(todaySales?.totalRefunds || 0)} refunds`}
-          icon="📊"
+          icon=""
         />
         <SalesCard
           title="Total Tax"
           value={todaySales?.totalTax || 0}
           subtitle={`${((todaySales?.totalTax || 0) / (todaySales?.totalRevenue || 1) * 100).toFixed(1)}% of revenue`}
-          icon="📋"
+          icon=""
         />
         <SalesCard
           title="Discounts Given"
           value={todaySales?.totalDiscount || 0}
           subtitle={`${((todaySales?.totalDiscount || 0) / (todaySales?.totalRevenue || 1) * 100).toFixed(1)}% of revenue`}
-          icon="🎫"
+          icon=""
         />
       </div>
 
