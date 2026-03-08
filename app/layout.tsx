@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/components/shared/auth-provider";
+import { ToastNotification } from "@/components/shared/toast-notification";
 
 export const metadata: Metadata = {
   title: "Nexus POS",
@@ -28,6 +29,7 @@ export default function RootLayout({
       </head>
       <body suppressHydrationWarning>
         <AuthProvider>{children}</AuthProvider>
+        <ToastNotification />
       </body>
     </html>
   );
