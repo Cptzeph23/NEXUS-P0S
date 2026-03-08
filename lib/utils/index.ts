@@ -4,8 +4,8 @@ import { twMerge } from "tailwind-merge";
 
 export function formatCurrency(
   amount: number,
-  currency = "USD",
-  locale = "en-US"
+  currency = "KES",
+  locale = "en-KE"
 ): string {
   return new Intl.NumberFormat(locale, {
     style: "currency",
