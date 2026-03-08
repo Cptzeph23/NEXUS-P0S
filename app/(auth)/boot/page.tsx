@@ -102,7 +102,7 @@ export default function BootPage() {
               autoFocus
             />
             <div className="mt-2 text-xs" style={{ color: "#6b6b8a" }}>
-              Available codes: DT01, UT01, BK01
+                Available codes: DT01, UT01, EL01
             </div>
           </div>
 
