@@ -265,7 +265,7 @@ export default function POSPage() {
             </div>
           </div>
 
-          {/* Right: Sync Status, Network, Logout */}
+          {/* Right: Sync Status, Network, Dashboard, Logout */}
           <div className="flex items-center gap-3">
             {/* Sync Status Component */}
             <SyncStatus />
@@ -285,6 +285,19 @@ export default function POSPage() {
               />
               {isOnline ? "Online" : "Offline"}
             </div>
+
+            {/* Dashboard Button */}
+            <button
+              onClick={() => (window.location.href = "/dashboard")}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+              style={{
+                backgroundColor: "#1f1040",
+                border: "1px solid #7c3aed",
+                color: "#a78bfa",
+              }}
+            >
+              📊 Dashboard
+            </button>
 
             {/* Logout Button */}
             <button
