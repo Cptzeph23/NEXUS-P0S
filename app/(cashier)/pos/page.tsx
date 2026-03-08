@@ -56,22 +56,33 @@ export default function POSPage() {
   const { addNotification } = useNotificationStore();
 
   // Network status effect - Effect 1
-  useEffect(() => {
-    function handleOnline() {
-      setIsOnline(true);
-    }
-    function handleOffline() {
-      setIsOnline(false);
-    }
+  // Network status effect - Effect 1
+useEffect(() => {
+  function handleOnline() {
+    setIsOnline(true);
+    addNotification({
+      type: "success",
+      message: "Back online! Syncing transactions...",
+      duration: 3000,
+    });
+  }
+  function handleOffline() {
+    setIsOnline(false);
+    addNotification({
+      type: "warning",
+      message: "You're offline. Transactions will be synced when online.",
+      duration: 5000,
+    });
+  }
 
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
+  window.addEventListener("online", handleOnline);
+  window.addEventListener("offline", handleOffline);
 
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
+  return () => {
+    window.removeEventListener("online", handleOnline);
+    window.removeEventListener("offline", handleOffline);
+  };
+}, [addNotification]);
 
   // Initialize data - Effect 2
   useEffect(() => {
