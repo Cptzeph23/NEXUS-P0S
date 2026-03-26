@@ -13,6 +13,7 @@ import {
   getAllCategories,
   searchProducts,
   getProductsByCategory,
+  getProductByBarcode,
 } from "@/lib/db/products";
 import { ProductCard } from "@/components/pos/product-card";
 import { CartLine } from "@/components/pos/cart-line";
